@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LANDLORD — Мировая Империя</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:       #0a0d14;
+  --surface:  #111520;
+  --panel:    #161b2e;
+  --border:   #1e2540;
+  --accent:   #4ade80;
+  --accent2:  #facc15;
+  --accent3:  #60a5fa;
+  --danger:   #f87171;
+  --muted:    #475569;
+  --text:     #e2e8f0;
+  --text-dim: #94a3b8;
+  --gold:     #f59e0b;
+  --r: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══ AUTH SCREEN ══════════════════════════════════════════ */
+#auth-screen {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 99999;
+  flex-direction: column;
+  gap: 0;
+}
+#auth-screen.hidden { display: none; }
+
+.auth-bg {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.auth-bg-dot {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle, rgba(74,222,128,.08) 0%, transparent 70%);
+  animation: pulse 4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{transform:scale(1);opacity:.5} 50%{transform:scale(1.2);opacity:1} }
+
+.auth-box {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 380px;
+  max-width: 95vw;
+}
+.auth-logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -1px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.auth-logo span { color: var(--accent2); }
+.auth-sub {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-bottom: 28px;
+}
+
+.auth-tabs {
+  display: flex;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 24px;
+}
+.auth-tab {
+  flex: 1; padding: 8px;
+  border: none; background: none;
+  color: var(--text-dim);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  border-radius: 6px; cursor: pointer; transition: all .2s;
+}
+.auth-tab.active { background: var(--panel); color: var(--text); }
+
+.auth-field { margin-bottom: 14px; }
+.auth-field label { font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
+.auth-field input {
+  width: 100%; padding: 11px 14px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r); color: var(--text);
+  font-family: inherit; font-size: 14px;
+  outline: none; transition: border-color .2s;
+}
+.auth-field input:focus { border-color: var(--accent3); }
+.auth-field input::placeholder { color: var(--muted); }
+
+.auth-error {
+  background: rgba(248,113,113,.1);
+  border: 1px solid rgba(248,113,113,.3);
+  border-radius: 6px; padding: 9px 12px;
+  font-size: 13px; color: var(--danger);
+  margin-bottom: 14px; display: none;
+}
+.auth-error.show { display: block; }
+
+.auth-btn {
+  width: 100%; padding: 13px;
+  background: linear-gradient(135deg, var(--accent), #22c55e);
+  border: none; border-radius: var(--r);
+  color: #000; font-family: inherit; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: opacity .2s;
+  position: relative;
+}
+.auth-btn:hover { opacity: .9; }
+.auth-btn:disabled { opacity: .5; cursor: not-allowed; }
+.auth-btn .spinner {
+  display: none; width: 18px; height: 18px;
+  border: 2px solid rgba(0,0,0,.3); border-top-color: #000;
+  border-radius: 50%; animation: spin .7s linear infinite;
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+}
+.auth-btn.loading .spinner { display: block; }
+@keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+.auth-hint { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; }
+
+/* ══ TOP BAR ══════════════════════════════════════════════ */
+#topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 1000; flex-shrink: 0;
+}
+#topbar .logo {
+  font-family: 'Space Mono', monospace; font-size: 18px;
+  font-weight: 700; color: var(--accent); letter-spacing: -1px; white-space: nowrap;
+}
+#topbar .logo span { color: var(--accent2); }
+
+.stat-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 20px; padding: 6px 14px; font-size: 13px;
+}
+.stat-chip .label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing:.5px; }
+.stat-chip .value { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--accent); font-size: 14px; }
+.stat-chip.income .value { color: var(--accent2); }
+.stat-chip.level  .value { color: var(--accent3); }
+
+.level-badge { display: flex; align-items: center; gap: 8px; }
+.xp-bar { width: 110px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.xp-fill { height: 100%; background: linear-gradient(90deg, var(--accent3), var(--accent)); border-radius: 3px; transition: width .5s; }
+
+#topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+.player-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 20px; padding: 6px 14px; font-size: 13px;
+  cursor: pointer; transition: border-color .2s;
+}
+.player-chip:hover { border-color: var(--accent3); }
+.player-chip .nick { font-weight: 600; font-size: 13px; }
+
+.sync-indicator {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent);
+  flex-shrink: 0;
+}
+.sync-indicator.syncing { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); animation: blink .8s ease infinite; }
+.sync-indicator.error   { background: var(--danger);  box-shadow: 0 0 6px var(--danger); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ══ MAIN LAYOUT ══════════════════════════════════════════ */
+#game-screen { display: flex; flex: 1; overflow: hidden; }
+#game-screen.hidden { display: none; }
+#map { flex: 1; z-index: 1; }
+.leaflet-tile { filter: brightness(.7) hue-rotate(200deg) saturate(.5); }
+
+/* ══ SIDEBAR ══════════════════════════════════════════════ */
+#sidebar {
+  width: 340px;
+  background: var(--surface); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden; z-index: 100;
+}
+.sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tab-btn {
+  flex: 1; padding: 12px 4px; background: none; border: none;
+  color: var(--text-dim); font-family: inherit; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all .2s;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(74,222,128,.05); }
+.tab-content { display: none; flex: 1; overflow-y: auto; padding: 12px; }
+.tab-content.active { display: flex; flex-direction: column; gap: 10px; }
+
+/* ══ PROPERTY CARD ══════════════════════════════════════ */
+.prop-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px; cursor: pointer;
+  transition: border-color .2s, transform .15s; position: relative;
+}
+.prop-card:hover { border-color: var(--accent); transform: translateX(2px); }
+.prop-card.owned { border-left: 3px solid var(--accent); }
+.prop-card.locked { opacity: .5; cursor: not-allowed; }
+.prop-card.locked:hover { transform: none; border-color: var(--border); }
+.prop-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.prop-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.prop-location { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.prop-lock { font-size: 11px; background: var(--danger); color: white; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+.prop-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.prop-stat { background: var(--bg); border-radius: 6px; padding: 6px 10px; }
+.prop-stat .s-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .4px; }
+.prop-stat .s-val { font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; color: var(--accent2); margin-top: 2px; }
+.ownership-bar { margin-top: 8px; }
+.own-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; display: flex; justify-content: space-between; }
+.own-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; display: flex; }
+.own-fill-me    { height: 100%; background: linear-gradient(90deg, var(--accent3), var(--accent)); transition: width .4s; }
+.own-fill-other { height: 100%; background: var(--danger); opacity: .6; transition: width .4s; }
+
+/* ══ PROFILE ══════════════════════════════════════════════ */
+.profile-section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; }
+.profile-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin-bottom: 12px; }
+.level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.lvl-cell {
+  aspect-ratio: 1; border-radius: 4px; border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-family: 'Space Mono', monospace; font-weight: 700;
+  color: var(--muted); transition: all .2s; cursor: help;
+}
+.lvl-cell.unlocked { background: var(--bg); color: var(--text-dim); border-color: var(--accent3); }
+.lvl-cell.current  { background: linear-gradient(135deg, var(--accent3), var(--accent)); color: #000; border-color: transparent; transform: scale(1.05); }
+.income-list { display: flex; flex-direction: column; gap: 6px; }
+.income-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: var(--bg); border-radius: 6px; }
+.income-row .name { font-size: 13px; }
+.income-row .amt  { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--accent2); }
+
+/* ══ UPGRADES ══════════════════════════════════════════════ */
+.upgrade-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; }
+.upgrade-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.upgrade-card .sub { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+.upgrade-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.upgrade-row:last-child { border-bottom: none; }
+.upg-info .upg-name { font-size: 12px; font-weight: 600; }
+.upg-info .upg-desc { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+.upg-stars { display: flex; gap: 3px; }
+.star { width: 14px; height: 14px; border-radius: 3px; background: var(--border); }
+.star.filled { background: var(--gold); }
+.upg-btn {
+  padding: 5px 10px; background: var(--accent2); border: none; border-radius: 5px;
+  color: #000; font-family: inherit; font-size: 11px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: opacity .2s;
+}
+.upg-btn:disabled { background: var(--muted); color: var(--text-dim); cursor: not-allowed; }
+
+/* ══ LEADERBOARD ══════════════════════════════════════════ */
+.lb-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; background: var(--bg); border-radius: 6px;
+}
+.lb-rank { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--text-dim); width: 20px; }
+.lb-rank.top { color: var(--gold); font-weight: 700; }
+.lb-nick { font-weight: 600; font-size: 13px; flex: 1; }
+.lb-nick.me { color: var(--accent); }
+.lb-earned { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--accent2); }
+.lb-lvl { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+
+/* ══ BUY POPUP ══════════════════════════════════════════════ */
+#popup-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.75); z-index: 9000;
+  align-items: center; justify-content: center;
+}
+#popup-overlay.show { display: flex; }
+#popup {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; width: 400px; max-width: 95vw; padding: 24px;
+  position: relative;
+}
+#popup h2 { font-size: 20px; margin-bottom: 4px; }
+.popup-loc { font-size: 13px; color: var(--text-dim); margin-bottom: 16px; }
+.popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.popup-stat { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+.popup-stat .ps-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .4px; }
+.popup-stat .ps-val { font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+
+/* owners list in popup */
+.popup-owners { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+.popup-owners .po-title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing:.4px; margin-bottom: 8px; }
+.po-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+.po-name { color: var(--text); }
+.po-name.me { color: var(--accent); font-weight: 600; }
+.po-pct { font-family: 'Space Mono', monospace; color: var(--accent2); }
+.po-free { color: var(--text-dim); font-style: italic; }
+
+.percent-slider label { font-size: 13px; color: var(--text-dim); }
+.percent-slider input[type=range] { width: 100%; accent-color: var(--accent); margin: 8px 0 4px; }
+.percent-info { display: flex; justify-content: space-between; font-size: 13px; }
+.percent-info span:last-child { font-family: 'Space Mono', monospace; color: var(--accent2); }
+
+.popup-actions { display: flex; gap: 10px; margin-top: 16px; }
+.popup-actions button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+#popup-buy { background: linear-gradient(135deg, var(--accent), #22c55e); color: #000; }
+#popup-buy:disabled { background: var(--muted); color: var(--text-dim); cursor: not-allowed; }
+#popup-cancel { background: var(--border); color: var(--text-dim); }
+.popup-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; }
+
+/* ══ TOASTS ══════════════════════════════════════════════ */
+#toast-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+.toast { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 18px; font-size: 13px; animation: slideUp .3s ease; white-space: nowrap; }
+.toast.success { border-color: var(--accent); color: var(--accent); }
+.toast.error   { border-color: var(--danger);  color: var(--danger); }
+.toast.info    { border-color: var(--accent3); color: var(--accent3); }
+@keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+/* income pop */
+#income-ticker { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 5000; }
+.income-pop {
+  font-family: 'Space Mono', monospace; font-size: 15px; font-weight: 700;
+  color: var(--accent); text-shadow: 0 0 12px rgba(74,222,128,.6);
+  animation: popUp 2s ease forwards; white-space: nowrap;
+}
+@keyframes popUp { 0%{opacity:0;transform:translateY(0)} 20%{opacity:1} 80%{opacity:1;transform:translateY(-30px)} 100%{opacity:0;transform:translateY(-50px)} }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* loading overlay */
+#loading {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 99998; flex-direction: column; gap: 16px;
+}
+#loading.hidden { display: none; }
+.load-logo { font-family: 'Space Mono', monospace; font-size: 24px; font-weight: 700; color: var(--accent); }
+.load-logo span { color: var(--accent2); }
+.load-spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+.load-text { font-size: 13px; color: var(--text-dim); }
+
+/* custom marker */
+.cmarker {
+  background: var(--panel); border: 2px solid var(--accent3); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+  box-shadow: 0 0 10px rgba(96,165,250,.3); transition: transform .2s;
+}
+.cmarker.owned { border-color: var(--accent); box-shadow: 0 0 12px rgba(74,222,128,.4); }
+.cmarker.locked { border-color: var(--muted); opacity: .6; }
+
+/* API URL config banner */
+#api-config-banner {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(250,204,21,.1); border-top: 1px solid rgba(250,204,21,.3);
+  padding: 8px 16px; display: flex; align-items: center; gap: 10px;
+  z-index: 9000; font-size: 12px;
+}
+#api-config-banner.hidden { display: none; }
+#api-config-banner input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 6px 10px;
+  font-family: 'Space Mono', monospace; font-size: 12px;
+}
+#api-config-banner button {
+  padding: 6px 14px; background: var(--accent2); border: none; border-radius: 6px;
+  color: #000; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="load-logo">LAND<span>LORD</span></div>
+  <div class="load-spinner"></div>
+  <div class="load-text">Подключение…</div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="hidden">
+  <div class="auth-bg">
+    <div class="auth-bg-dot" style="width:600px;height:600px;top:-200px;left:-100px;animation-delay:0s"></div>
+    <div class="auth-bg-dot" style="width:400px;height:400px;bottom:-100px;right:-100px;animation-delay:2s"></div>
+  </div>
+  <div class="auth-box">
+    <div class="auth-logo">LAND<span>LORD</span></div>
+    <div class="auth-sub">Мировая Империя Недвижимости</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="authTab('login')">Войти</button>
+      <button class="auth-tab" onclick="authTab('register')">Регистрация</button>
+    </div>
+
+    <div id="auth-error" class="auth-error"></div>
+
+    <div class="auth-field">
+      <label>Никнейм</label>
+      <input id="auth-nick" type="text" placeholder="Ваш никнейм" maxlength="32" autocomplete="username">
+    </div>
+    <div class="auth-field">
+      <label>Пароль</label>
+      <input id="auth-pass" type="password" placeholder="Пароль" autocomplete="current-password">
+    </div>
+
+    <button class="auth-btn" id="auth-btn" onclick="authSubmit()">
+      Войти
+      <div class="spinner"></div>
+    </button>
+    <div class="auth-hint" id="auth-hint">Минимум 6 символов для пароля</div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen" class="hidden" style="display:none;flex-direction:column;height:100vh">
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div class="logo">LAND<span>LORD</span></div>
+    <div class="stat-chip">
+      <div><div class="label">Баланс</div><div class="value" id="stat-balance">—</div></div>
+    </div>
+    <div class="stat-chip income">
+      <div><div class="label">Доход/сек</div><div class="value" id="stat-income">—</div></div>
+    </div>
+    <div class="stat-chip level">
+      <div><div class="label">Уровень</div><div class="value" id="stat-level">—</div></div>
+    </div>
+    <div class="level-badge">
+      <span style="font-size:11px;color:var(--text-dim)">XP</span>
+      <div class="xp-bar"><div class="xp-fill" id="xp-fill" style="width:0%"></div></div>
+      <span style="font-size:11px;color:var(--text-dim)" id="xp-text">0/100</span>
+    </div>
+    <div id="topbar-right">
+      <div class="sync-indicator" id="sync-dot" title="Синхронизация"></div>
+      <div class="player-chip" onclick="showTab('leaderboard')" title="Таблица лидеров">
+        <span>👤</span>
+        <span class="nick" id="topbar-nick">—</span>
+      </div>
+      <button onclick="doLogout()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;padding:4px" title="Выйти">⏻</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div style="display:flex;flex:1;overflow:hidden">
+    <div id="map"></div>
+
+    <div id="sidebar">
+      <div class="sidebar-tabs">
+        <button class="tab-btn active" onclick="showTab('market')">🏪 Рынок</button>
+        <button class="tab-btn" onclick="showTab('owned')">🏠 Мои</button>
+        <button class="tab-btn" onclick="showTab('upgrade')">⚡ Прокачка</button>
+        <button class="tab-btn" onclick="showTab('leaderboard')">🏆 Топ</button>
+        <button class="tab-btn" onclick="showTab('profile')">👤 Профиль</button>
+      </div>
+
+      <div id="tab-market" class="tab-content active"></div>
+
+      <div id="tab-owned" class="tab-content">
+        <div class="profile-section">
+          <h3>💰 Источники дохода</h3>
+          <div id="income-list" class="income-list"></div>
+        </div>
+      </div>
+
+      <div id="tab-upgrade"     class="tab-content"><div id="upgrade-list"></div></div>
+      <div id="tab-leaderboard" class="tab-content"><div id="lb-list" class="income-list"></div></div>
+
+      <div id="tab-profile" class="tab-content">
+        <div class="profile-section">
+          <h3>🎮 Система уровней</h3>
+          <div class="level-grid" id="level-grid"></div>
+        </div>
+        <div class="profile-section">
+          <h3>📊 Статистика</h3>
+          <div id="profile-stats" class="income-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BUY POPUP -->
+<div id="popup-overlay">
+  <div id="popup">
+    <button class="popup-close" onclick="closePopup()">✕</button>
+    <div id="popup-icon" style="font-size:30px;margin-bottom:6px"></div>
+    <h2 id="popup-name"></h2>
+    <div class="popup-loc" id="popup-loc"></div>
+    <div class="popup-grid">
+      <div class="popup-stat"><div class="ps-label">Стоимость</div><div class="ps-val" id="popup-cost"></div></div>
+      <div class="popup-stat"><div class="ps-label">Доход/сек</div><div class="ps-val" id="popup-inc"></div></div>
+      <div class="popup-stat"><div class="ps-label">Мин. уровень</div><div class="ps-val" id="popup-minlvl"></div></div>
+      <div class="popup-stat"><div class="ps-label">Доступно</div><div class="ps-val" id="popup-avail"></div></div>
+    </div>
+    <div class="popup-owners"><div class="po-title">Владельцы</div><div id="popup-owners-list"></div></div>
+    <div class="percent-slider">
+      <label>Купить долю:</label>
+      <input type="range" id="buy-slider" min="1" max="100" value="10" oninput="updateBuyCalc()">
+      <div class="percent-info"><span id="buy-pct-lbl">10%</span><span id="buy-cost-lbl">$0</span></div>
+    </div>
+    <div class="popup-actions">
+      <button id="popup-cancel" onclick="closePopup()">Отмена</button>
+      <button id="popup-buy" onclick="confirmBuy()">Купить</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<div id="income-ticker"></div>
+
+<!-- API URL CONFIG (shown when no API configured) -->
+<div id="api-config-banner">
+  <span style="color:var(--accent2);font-weight:600">⚙️ API:</span>
+  <input id="api-url-input" type="text" placeholder="http://localhost:3000" value="">
+  <button onclick="saveApiUrl()">Сохранить</button>
+  <button onclick="document.getElementById('api-config-banner').classList.add('hidden')" style="background:var(--muted)">✕</button>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════════════
+let API_BASE = localStorage.getItem('ll_api_base') || '';
+
+function saveApiUrl() {
+  const val = document.getElementById('api-url-input').value.trim().replace(/\/$/, '');
+  API_BASE = val;
+  localStorage.setItem('ll_api_base', val);
+  document.getElementById('api-config-banner').classList.add('hidden');
+  toast('API URL сохранён', 'success');
+  init();
+}
+
+// ══════════════════════════════════════════════════════════
+//  API CLIENT
+// ══════════════════════════════════════════════════════════
+let _token = localStorage.getItem('ll_token') || null;
+
+function apiHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (_token) h['Authorization'] = 'Bearer ' + _token;
+  return h;
+}
+
+async function apiReq(method, path, body) {
+  setSyncing(true);
+  try {
+    const opts = { method, headers: apiHeaders() };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(API_BASE + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    return data;
+  } finally {
+    setSyncing(false);
+  }
+}
+
+const api = {
+  login:     (n, p)   => apiReq('POST', '/api/auth/login',    { nickname:n, password:p }),
+  register:  (n, p)   => apiReq('POST', '/api/auth/register', { nickname:n, password:p }),
+  me:        ()       => apiReq('GET',  '/api/player/me'),
+  leaderboard: ()     => apiReq('GET',  '/api/player/leaderboard'),
+  properties: ()      => apiReq('GET',  '/api/properties'),
+  property:  (id)     => apiReq('GET',  '/api/properties/' + id),
+  buy:       (id,pct) => apiReq('POST', '/api/game/buy',             { propertyId:id, pct }),
+  upgProp:   (id)     => apiReq('POST', '/api/game/upgrade/property', { propertyId:id }),
+  upgGlobal: (key)    => apiReq('POST', '/api/game/upgrade/global',   { upgradeKey:key }),
+  health:    ()       => apiReq('GET',  '/api/health'),
+};
+
+// ══════════════════════════════════════════════════════════
+//  GAME STATE  (synced from server)
+// ══════════════════════════════════════════════════════════
+let G = {
+  player:       null,   // raw player row from DB
+  ownerships:   [],     // array from /api/player/me
+  incomePerSec: 0,
+  properties:   [],     // all properties with total_owned_pct
+  nickname:     '',
+};
+
+const LEVEL_TITLES = [
+  'Стартовый игрок','Мелкий арендодатель','Городской инвестор','Районный магнат',
+  'Столичный девелопер','Континентальный игрок','Глобальный инвестор','Мировой арендодатель',
+  'Имперский магнат','Олигарх недвижимости','Властелин кварталов','Городской Бог',
+  'Тайный Владыка','Архитектор мира','Мегакорпорация','Планетарный монополист',
+  'Сверхимперия','Абсолютный Лендлорд','Хозяин Земли','МИРОВОЙ ГОСПОДИН',
+];
+const LEVEL_XP = [0,100,250,500,900,1500,2500,4000,6000,9000,13000,18000,25000,35000,50000,70000,100000,150000,200000,300000];
+const UPGRADE_COSTS = { speed:[500,2000,8000,30000,100000], attract:[800,3000,12000,50000,200000], auto:[1500,6000,25000,80000,300000] };
+const UPGRADES_META = {
+  speed:   { name:'Скорость дохода',    desc:'Увеличивает доход/сек', icon:'⚡' },
+  attract: { name:'Привлекательность',  desc:'Бонус к покупкам',      icon:'✨' },
+  auto:    { name:'Автодоход',          desc:'Пассивный офлайн-доход', icon:'🤖' },
+};
+
+// ══════════════════════════════════════════════════════════
+//  MAP
+// ══════════════════════════════════════════════════════════
+let leafletMap = null;
+let mapMarkers = {};
+
+function initMap() {
+  if (leafletMap) return;
+  leafletMap = L.map('map', { zoomControl: true }).setView([30, 20], 2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '©OpenStreetMap ©CartoDB', subdomains: 'abcd', maxZoom: 19
+  }).addTo(leafletMap);
+}
+
+function refreshMapMarkers() {
+  if (!leafletMap) return;
+  Object.values(mapMarkers).forEach(m => leafletMap.removeLayer(m));
+  mapMarkers = {};
+
+  G.properties.forEach(prop => {
+    const myOwn  = G.ownerships.find(o => o.property_id == prop.id);
+    const owned  = !!myOwn;
+    const locked = G.player && G.player.level < prop.min_level;
+
+    const div = document.createElement('div');
+    div.className = 'cmarker' + (owned ? ' owned' : '') + (locked ? ' locked' : '');
+    div.style.width  = '32px';
+    div.style.height = '32px';
+    div.innerHTML = prop.icon;
+
+    const icon   = L.divIcon({ html: div.outerHTML, className:'', iconSize:[32,32], iconAnchor:[16,16] });
+    const marker = L.marker([prop.lat, prop.lng], { icon }).addTo(leafletMap);
+    marker.on('click', () => openBuyPopup(prop));
+    mapMarkers[prop.id] = marker;
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════════════════
+let _authMode = 'login';
+
+function authTab(mode) {
+  _authMode = mode;
+  document.querySelectorAll('.auth-tab').forEach((b,i) =>
+    b.classList.toggle('active', (i===0 && mode==='login') || (i===1 && mode==='register'))
+  );
+  document.getElementById('auth-btn').textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
+  document.getElementById('auth-btn').innerHTML += '<div class="spinner"></div>';
+  document.getElementById('auth-hint').textContent = mode === 'login'
+    ? 'Введите никнейм и пароль'
+    : 'Никнейм: 3–32 символа (буквы/цифры/_)';
+  document.getElementById('auth-error').classList.remove('show');
+}
+
+async function authSubmit() {
+  const nick = document.getElementById('auth-nick').value.trim();
+  const pass = document.getElementById('auth-pass').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.classList.remove('show');
+
+  if (!nick || !pass) { errEl.textContent = 'Заполните все поля'; errEl.classList.add('show'); return; }
+
+  const btn = document.getElementById('auth-btn');
+  btn.disabled = true; btn.classList.add('loading');
+
+  try {
+    const data = _authMode === 'login' ? await api.login(nick, pass) : await api.register(nick, pass);
+    _token = data.token;
+    localStorage.setItem('ll_token', _token);
+    G.nickname = data.player.nickname;
+    await loadGameState();
+    showGame();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.classList.remove('loading');
+  }
+}
+
+// Enter key in auth
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('auth-screen').classList.contains('hidden')) authSubmit();
+});
+
+function doLogout() {
+  _token = null;
+  localStorage.removeItem('ll_token');
+  G.player = null;
+  document.getElementById('game-screen').style.display = 'none';
+  document.getElementById('auth-screen').classList.remove('hidden');
+  stopPolling();
+  toast('Вы вышли из аккаунта', 'info');
+}
+
+// ══════════════════════════════════════════════════════════
+//  LOAD STATE
+// ══════════════════════════════════════════════════════════
+async function loadGameState() {
+  const [meData, propsData] = await Promise.all([api.me(), api.properties()]);
+  G.player       = meData.player;
+  G.ownerships   = meData.ownerships;
+  G.incomePerSec = meData.incomePerSec;
+  G.properties   = propsData;
+  G.nickname     = G.player.nickname;
+}
+
+// ══════════════════════════════════════════════════════════
+//  POLLING  (sync state every 15s)
+// ══════════════════════════════════════════════════════════
+let _pollTimer = null;
+
+function startPolling() {
+  _pollTimer = setInterval(async () => {
+    try {
+      await loadGameState();
+      renderAll();
+      refreshMapMarkers();
+    } catch (e) { setSyncError(); }
+  }, 15000);
+}
+function stopPolling() { clearInterval(_pollTimer); }
+
+// ══════════════════════════════════════════════════════════
+//  SHOW GAME / AUTH
+// ══════════════════════════════════════════════════════════
+function showGame() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  const gs = document.getElementById('game-screen');
+  gs.style.display = 'flex';
+  initMap();
+  setTimeout(() => leafletMap.invalidateSize(), 100);
+  renderAll();
+  refreshMapMarkers();
+  startPolling();
+  toast('👋 Добро пожаловать, ' + G.nickname + '!', 'success');
+}
+
+// ══════════════════════════════════════════════════════════
+//  BUY POPUP
+// ══════════════════════════════════════════════════════════
+let _activeProp      = null;
+let _activePropDetail = null;
+
+async function openBuyPopup(prop) {
+  _activeProp = prop;
+
+  // Fetch live ownership detail
+  let detail;
+  try {
+    detail = await api.property(prop.id);
+    _activePropDetail = detail;
+  } catch(e) {
+    toast('Ошибка загрузки данных', 'error'); return;
+  }
+
+  document.getElementById('popup-icon').textContent = prop.icon;
+  document.getElementById('popup-name').textContent = prop.name;
+  document.getElementById('popup-loc').textContent  = '📍 ' + prop.location;
+  document.getElementById('popup-cost').textContent = fmt(prop.cost);
+  document.getElementById('popup-inc').textContent  = fmt(prop.income_base) + '/сек';
+  document.getElementById('popup-minlvl').textContent = 'Ур. ' + prop.min_level;
+  document.getElementById('popup-avail').textContent = detail.availablePct.toFixed(1) + '%';
+
+  // Owners list
+  const ownersList = document.getElementById('popup-owners-list');
+  ownersList.innerHTML = '';
+  const myOwn = G.ownerships.find(o => o.property_id == prop.id);
+  detail.owners.forEach(o => {
+    const isMe = o.nickname === G.nickname;
+    ownersList.innerHTML += `<div class="po-row"><span class="po-name ${isMe?'me':''}">${isMe?'👤 Вы':o.nickname}</span><span class="po-pct">${parseFloat(o.pct).toFixed(1)}%</span></div>`;
+  });
+  if (detail.availablePct > 0) {
+    ownersList.innerHTML += `<div class="po-row"><span class="po-free">Свободно</span><span class="po-pct">${detail.availablePct.toFixed(1)}%</span></div>`;
+  }
+
+  // Slider
+  const maxBuy = Math.floor(detail.availablePct);
+  const slider = document.getElementById('buy-slider');
+  slider.max   = maxBuy;
+  slider.value = Math.min(10, maxBuy);
+
+  const locked  = G.player && G.player.level < prop.min_level;
+  const buyBtn  = document.getElementById('popup-buy');
+  buyBtn.disabled = locked || maxBuy <= 0;
+  buyBtn.textContent = locked ? `Нужен уровень ${prop.min_level}` : maxBuy <= 0 ? 'Нет долей' : 'Купить';
+
+  updateBuyCalc();
+  document.getElementById('popup-overlay').classList.add('show');
+}
+
+function updateBuyCalc() {
+  if (!_activeProp) return;
+  const pct  = parseInt(document.getElementById('buy-slider').value);
+  const cost = _activeProp.cost * pct / 100;
+  document.getElementById('buy-pct-lbl').textContent  = pct + '%';
+  document.getElementById('buy-cost-lbl').textContent = fmt(cost);
+}
+
+function closePopup() {
+  document.getElementById('popup-overlay').classList.remove('show');
+  _activeProp = null;
+}
+
+async function confirmBuy() {
+  const prop = _activeProp;
+  const pct  = parseInt(document.getElementById('buy-slider').value);
+  if (!prop || pct <= 0) return;
+
+  const btn = document.getElementById('popup-buy');
+  btn.disabled = true; btn.textContent = '…';
+
+  try {
+    const res = await api.buy(prop.id, pct);
+    toast(`✅ +${pct}% ${prop.name} куплено!${res.leveledUp ? ' 🎉 Новый уровень '+res.newLevel+'!' : ''}`, 'success');
+    closePopup();
+    await loadGameState();
+    renderAll();
+    refreshMapMarkers();
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false; btn.textContent = 'Купить';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  UPGRADE ACTIONS
+// ══════════════════════════════════════════════════════════
+async function doUpgradeProp(propId) {
+  try {
+    const res = await api.upgProp(propId);
+    toast(`⬆️ Объект прокачан до уровня ${res.newUpgLevel}!`, 'success');
+    await loadGameState();
+    renderAll();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function doUpgradeGlobal(key) {
+  try {
+    const res = await api.upgGlobal(key);
+    const meta = UPGRADES_META[key];
+    toast(`${meta.icon} ${meta.name} → уровень ${res.newLevel}!`, 'success');
+    await loadGameState();
+    renderAll();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════
+function fmt(n) {
+  n = parseFloat(n);
+  if (n >= 1e9)  return '$' + (n/1e9).toFixed(2)  + 'B';
+  if (n >= 1e6)  return '$' + (n/1e6).toFixed(2)  + 'M';
+  if (n >= 1e3)  return '$' + (n/1e3).toFixed(1)  + 'K';
+  return '$' + n.toFixed(2);
+}
+
+function renderTopBar() {
+  if (!G.player) return;
+  const p = G.player;
+  document.getElementById('stat-balance').textContent = fmt(p.balance);
+  document.getElementById('stat-income').textContent  = fmt(G.incomePerSec) + '/с';
+  document.getElementById('stat-level').textContent   = p.level;
+  document.getElementById('topbar-nick').textContent  = G.nickname;
+
+  const curXP     = p.xp;
+  const curLvlXP  = LEVEL_XP[p.level - 1];
+  const nextLvlXP = p.level < 20 ? LEVEL_XP[p.level] : curLvlXP + 1;
+  const pct       = Math.min(100, ((curXP - curLvlXP) / (nextLvlXP - curLvlXP)) * 100);
+  document.getElementById('xp-fill').style.width = pct + '%';
+  document.getElementById('xp-text').textContent = (curXP - curLvlXP) + '/' + (nextLvlXP - curLvlXP);
+}
+
+function renderMarket() {
+  const el = document.getElementById('tab-market');
+  el.innerHTML = '';
+  G.properties.forEach(prop => {
+    const myOwn  = G.ownerships.find(o => o.property_id == prop.id);
+    const locked = G.player && G.player.level < prop.min_level;
+    const myPct  = myOwn ? parseFloat(myOwn.pct) : 0;
+    const totalOtherPct = parseFloat(prop.total_owned_pct) - myPct;
+
+    const card = document.createElement('div');
+    card.className = 'prop-card' + (myOwn ? ' owned' : '') + (locked ? ' locked' : '');
+    card.onclick   = () => !locked && openBuyPopup(prop);
+
+    card.innerHTML = `
+      <div class="prop-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:22px">${prop.icon}</span>
+          <div>
+            <div class="prop-name">${prop.name}</div>
+            <div class="prop-location">📍 ${prop.location}</div>
+          </div>
+        </div>
+        ${locked ? `<div class="prop-lock">Ур.${prop.min_level}</div>` : ''}
+      </div>
+      <div class="prop-stats">
+        <div class="prop-stat"><div class="s-label">Стоимость</div><div class="s-val">${fmt(prop.cost)}</div></div>
+        <div class="prop-stat"><div class="s-label">Доход/сек</div><div class="s-val">${fmt(prop.income_base)}</div></div>
+      </div>
+      ${myPct > 0 || totalOtherPct > 0 ? `
+        <div class="ownership-bar" style="margin-top:8px">
+          <div class="own-label">
+            <span>Вы ${myPct.toFixed(1)}% / Другие ${totalOtherPct.toFixed(1)}%</span>
+            <span style="color:var(--accent)">${(100 - parseFloat(prop.total_owned_pct)).toFixed(1)}% свободно</span>
+          </div>
+          <div class="own-track">
+            <div class="own-fill-me"    style="width:${myPct}%"></div>
+            <div class="own-fill-other" style="width:${totalOtherPct}%"></div>
+          </div>
+        </div>
+      ` : ''}
+    `;
+    el.appendChild(card);
+  });
+}
+
+function renderOwned() {
+  const el = document.getElementById('income-list');
+  el.innerHTML = '';
+  if (!G.ownerships.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;text-align:center;padding:20px">Купите первую собственность на карте!</div>';
+    return;
+  }
+  G.ownerships.forEach(o => {
+    const inc = G.incomePerSec > 0
+      ? (parseFloat(o.income_base) * parseFloat(o.pct) / 100) / (G.ownerships.length || 1) * G.incomePerSec * G.ownerships.length
+      : 0;
+    // Simplified per-row estimate
+    const row = document.createElement('div');
+    row.className = 'income-row';
+    row.innerHTML = `
+      <span class="name">${o.icon} ${o.name} <span style="color:var(--text-dim);font-size:11px">${parseFloat(o.pct).toFixed(1)}%</span></span>
+      <span class="amt">Ур.${o.upg_level}/5</span>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function renderUpgrades() {
+  const el = document.getElementById('upgrade-list');
+  el.innerHTML = '';
+  if (!G.player) return;
+
+  // Per-property upgrades
+  if (G.ownerships.length > 0) {
+    const card = document.createElement('div');
+    card.className = 'upgrade-card';
+    card.innerHTML = '<h4>🏠 Прокачка объектов</h4><div class="sub">+25% дохода за уровень (макс. 5)</div>';
+    G.ownerships.forEach(o => {
+      const lvl     = o.upg_level || 0;
+      const cost    = Math.round(parseFloat(o.cost) * 0.2 * (lvl + 1));
+      const canAfford = parseFloat(G.player.balance) >= cost;
+      const stars   = Array.from({length:5}, (_,i) => `<div class="star${i<lvl?' filled':''}"></div>`).join('');
+      const row     = document.createElement('div');
+      row.className = 'upgrade-row';
+      row.innerHTML = `
+        <div class="upg-info">
+          <div class="upg-name">${o.icon} ${o.name}</div>
+          <div class="upg-desc">Ур.${lvl}/5 · ${fmt(cost)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="upg-stars">${stars}</div>
+          <button class="upg-btn" ${lvl>=5||!canAfford?'disabled':''} onclick="doUpgradeProp(${o.property_id})">${lvl>=5?'MAX':'⬆️'}</button>
+        </div>
+      `;
+      card.appendChild(row);
+    });
+    el.appendChild(card);
+  }
+
+  // Global upgrades
+  const gc = document.createElement('div');
+  gc.className = 'upgrade-card';
+  gc.innerHTML = '<h4>🌍 Глобальные улучшения</h4><div class="sub">Применяются ко всей империи</div>';
+  ['speed','attract','auto'].forEach(key => {
+    const meta = UPGRADES_META[key];
+    const lvl  = G.player['upg_' + key] || 0;
+    const cost = UPGRADE_COSTS[key][lvl];
+    const canAfford = cost && parseFloat(G.player.balance) >= cost;
+    const stars = Array.from({length:5}, (_,i) => `<div class="star${i<lvl?' filled':''}"></div>`).join('');
+    const row   = document.createElement('div');
+    row.className = 'upgrade-row';
+    row.innerHTML = `
+      <div class="upg-info">
+        <div class="upg-name">${meta.icon} ${meta.name}</div>
+        <div class="upg-desc">${meta.desc}${cost ? ' · '+fmt(cost) : ' · MAX'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="upg-stars">${stars}</div>
+        <button class="upg-btn" ${lvl>=5||!canAfford?'disabled':''} onclick="doUpgradeGlobal('${key}')">${lvl>=5?'MAX':'⬆️'}</button>
+      </div>
+    `;
+    gc.appendChild(row);
+  });
+  el.appendChild(gc);
+}
+
+async function renderLeaderboard() {
+  const el = document.getElementById('lb-list');
+  el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;text-align:center;padding:16px">Загрузка…</div>';
+  try {
+    const rows = await api.leaderboard();
+    el.innerHTML = '';
+    rows.forEach((r, i) => {
+      const isMe = r.nickname === G.nickname;
+      const div  = document.createElement('div');
+      div.className = 'lb-row';
+      div.innerHTML = `
+        <div class="lb-rank ${i<3?'top':''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)}</div>
+        <div class="lb-nick ${isMe?'me':''}">${r.nickname}${isMe?' 👈':''}</div>
+        <div class="lb-lvl">Ур.${r.level}</div>
+        <div class="lb-earned">${fmt(r.total_earned)}</div>
+      `;
+      el.appendChild(div);
+    });
+  } catch(e) { el.innerHTML = '<div style="color:var(--danger);padding:16px">Ошибка загрузки</div>'; }
+}
+
+function renderProfile() {
+  if (!G.player) return;
+  const p = G.player;
+
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  for (let i = 1; i <= 20; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'lvl-cell' + (i < p.level ? ' unlocked' : '') + (i === p.level ? ' current' : '');
+    cell.textContent = i;
+    cell.title = LEVEL_TITLES[i-1];
+    grid.appendChild(cell);
+  }
+
+  document.getElementById('profile-stats').innerHTML = `
+    <div class="income-row"><span class="name">Никнейм</span><span class="amt" style="color:var(--accent)">${G.nickname}</span></div>
+    <div class="income-row"><span class="name">Всего заработано</span><span class="amt">${fmt(p.total_earned)}</span></div>
+    <div class="income-row"><span class="name">Объектов куплено</span><span class="amt">${G.ownerships.length}</span></div>
+    <div class="income-row"><span class="name">Доход/сек</span><span class="amt">${fmt(G.incomePerSec)}</span></div>
+    <div class="income-row"><span class="name">Статус</span><span class="amt" style="font-size:11px">${LEVEL_TITLES[p.level-1]}</span></div>
+    <div class="income-row"><span class="name">В игре с</span><span class="amt" style="font-size:11px">${new Date(p.created_at).toLocaleDateString('ru')}</span></div>
+  `;
+}
+
+function renderAll() {
+  renderTopBar();
+  renderMarket();
+  renderOwned();
+  renderUpgrades();
+  renderProfile();
+}
+
+// ══════════════════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════════════════
+function showTab(name) {
+  const tabs = ['market','owned','upgrade','leaderboard','profile'];
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', tabs[i] === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'leaderboard') renderLeaderboard();
+}
+
+function setSyncing(v) { document.getElementById('sync-dot')?.classList.toggle('syncing', v); }
+function setSyncError() { document.getElementById('sync-dot')?.classList.add('error'); }
+
+function toast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// Client-side income ticker (visual only, real values come from server)
+let _clientIncome = 0;
+setInterval(() => {
+  if (!G.player || G.incomePerSec <= 0) return;
+  G.player.balance = (parseFloat(G.player.balance) + G.incomePerSec).toString();
+  document.getElementById('stat-balance').textContent = fmt(G.player.balance);
+  if (Math.random() < 0.08) {
+    const el = document.createElement('div');
+    el.className = 'income-pop';
+    el.textContent = '+' + fmt(G.incomePerSec);
+    document.getElementById('income-ticker').appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  }
+}, 1000);
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+async function init() {
+  document.getElementById('loading').classList.remove('hidden');
+
+  // Show API config if no base set and not same-origin
+  if (!API_BASE) {
+    document.getElementById('api-url-input').value = window.location.origin || 'http://localhost:3000';
+  }
+
+  // Try to reconnect with saved token
+  if (_token) {
+    try {
+      await loadGameState();
+      document.getElementById('loading').classList.add('hidden');
+      showGame();
+      return;
+    } catch (e) {
+      // Token expired or API down
+      _token = null;
+      localStorage.removeItem('ll_token');
+    }
+  }
+
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('auth-screen').classList.remove('hidden');
+}
+
+init();
+</script>
+</body>
+</html>

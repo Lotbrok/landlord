@@ -1,0 +1,63 @@
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: landlord_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - landlord_pgdata:/var/lib/postgresql/data
+    # Not exposed to host — only reachable by app container
+    networks:
+      - landlord_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Migration runner (runs once, then exits) ─────────────
+  migrate:
+    build: .
+    container_name: landlord_migrate
+    command: sh -c "node server/db/migrate.js && node server/db/seed.js"
+    env_file: .env
+    environment:
+      DB_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - landlord_net
+    # One-shot: don't restart
+    restart: "no"
+
+  # ── App ──────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: landlord_app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST:      db
+      NODE_ENV:     production
+      CORS_ORIGIN:  https://landlord.cyphorium.com
+    ports:
+      - "127.0.0.1:3000:3000"   # only localhost — Nginx proxies from outside
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - landlord_net
+
+volumes:
+  landlord_pgdata:
+    name: landlord_pgdata
+
+networks:
+  landlord_net:
+    name: landlord_net
