@@ -522,6 +522,58 @@ body {
   </div>
 </div>
 
+
+<!-- OSM BUY POPUP -->
+<div id="osm-popup-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9001;align-items:center;justify-content:center">
+  <div id="osm-popup" style="background:var(--panel);border:1px solid var(--border);border-radius:14px;width:420px;max-width:95vw;padding:24px;position:relative;max-height:90vh;overflow-y:auto">
+    <button onclick="closeOSMPopup()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer">✕</button>
+    <div id="osm-icon" style="font-size:30px;margin-bottom:6px"></div>
+    <h2 id="osm-name" style="font-size:18px;margin-bottom:4px"></h2>
+    <div id="osm-loc" style="font-size:13px;color:var(--text-dim);margin-bottom:16px"></div>
+
+    <!-- Building type badge -->
+    <div id="osm-type-badge" style="display:inline-block;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--text-dim);margin-bottom:14px"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--bg);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px">Стоимость (100%)</div>
+        <div id="osm-cost" style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent);margin-top:2px"></div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px">Доход/сек (100%)</div>
+        <div id="osm-income" style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent2);margin-top:2px"></div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px">Мин. уровень</div>
+        <div id="osm-minlvl" style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent3);margin-top:2px"></div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px">Свободно</div>
+        <div id="osm-avail" style="font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--accent);margin-top:2px"></div>
+      </div>
+    </div>
+
+    <!-- Owners -->
+    <div id="osm-owners-wrap" style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Владельцы</div>
+      <div id="osm-owners-list"></div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label style="font-size:13px;color:var(--text-dim)">Купить долю:</label>
+      <input type="range" id="osm-slider" min="1" max="100" value="10" oninput="updateOSMCalc()" style="width:100%;accent-color:var(--accent);margin:8px 0 4px">
+      <div style="display:flex;justify-content:space-between;font-size:13px">
+        <span id="osm-pct-lbl">10%</span>
+        <span id="osm-cost-lbl" style="font-family:'Space Mono',monospace;color:var(--accent2)">$0</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button onclick="closeOSMPopup()" style="flex:1;padding:12px;border:none;border-radius:8px;background:var(--border);color:var(--text-dim);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">Отмена</button>
+      <button id="osm-buy-btn" onclick="confirmOSMBuy()" style="flex:1;padding:12px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--accent),#22c55e);color:#000;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">Купить</button>
+    </div>
+  </div>
+</div>
 <div id="toast-container"></div>
 <div id="income-ticker"></div>
 
@@ -584,6 +636,10 @@ const api = {
   upgProp:   (id)     => apiReq('POST', '/api/game/upgrade/property', { propertyId:id }),
   upgGlobal: (key)    => apiReq('POST', '/api/game/upgrade/global',   { upgradeKey:key }),
   health:    ()       => apiReq('GET',  '/api/health'),
+  osmLookup: (lat,lng)=> apiReq('GET',  `/api/osm/lookup?lat=${lat}&lng=${lng}`),
+  osmBuy:    (data)   => apiReq('POST', '/api/osm/buy', data),
+  osmOwned:  ()       => apiReq('GET',  '/api/osm/owned'),
+  osmMarkers:(bounds) => apiReq('GET',  `/api/osm/markers?bounds=${bounds}`),
 };
 
 // ══════════════════════════════════════════════════════════
@@ -594,6 +650,7 @@ let G = {
   ownerships:   [],     // array from /api/player/me
   incomePerSec: 0,
   properties:   [],     // all properties with total_owned_pct
+  osmOwnerships: [],    // OSM owned properties
   nickname:     '',
 };
 
@@ -624,6 +681,71 @@ function initMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '©OpenStreetMap ©CartoDB', subdomains: 'abcd', maxZoom: 19
   }).addTo(leafletMap);
+
+  // Click anywhere on map to look up a building
+  leafletMap.on('click', async (e) => {
+    if (!G.player) return;
+    const { lat, lng } = e.latlng;
+    showMapLoading(lat, lng);
+    try {
+      const data = await api.osmLookup(lat, lng);
+      hideMapLoading();
+      if (!data.found) { toast(data.message || 'Здесь нет объектов', 'info'); return; }
+      openOSMPopup(data);
+    } catch(err) {
+      hideMapLoading();
+      toast('Ошибка загрузки объекта: ' + err.message, 'error');
+    }
+  });
+
+  // Load OSM markers when map moves
+  leafletMap.on('moveend', loadOSMMarkers);
+}
+
+// Loading indicator on map click
+let _loadingMarker = null;
+function showMapLoading(lat, lng) {
+  hideMapLoading();
+  const el = document.createElement('div');
+  el.style.cssText = 'width:32px;height:32px;border:3px solid #4ade80;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;background:#111520';
+  const icon = L.divIcon({ html: el.outerHTML, className:'', iconSize:[32,32], iconAnchor:[16,16] });
+  _loadingMarker = L.marker([lat,lng], { icon }).addTo(leafletMap);
+}
+function hideMapLoading() {
+  if (_loadingMarker) { leafletMap.removeLayer(_loadingMarker); _loadingMarker = null; }
+}
+
+// Load OSM markers in current viewport
+let _osmMapMarkers = {};
+async function loadOSMMarkers() {
+  if (!leafletMap || leafletMap.getZoom() < 13) return; // only at street level
+  const b = leafletMap.getBounds();
+  const bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(n=>n.toFixed(5)).join(',');
+  try {
+    const markers = await api.osmMarkers(bounds);
+    // Remove old OSM markers
+    Object.values(_osmMapMarkers).forEach(m => leafletMap.removeLayer(m));
+    _osmMapMarkers = {};
+    markers.forEach(prop => {
+      const myOwn = G.osmOwnerships.find(o => o.property_id == prop.id);
+      const owned = !!myOwn || parseFloat(prop.total_owned_pct) > 0;
+      const el = document.createElement('div');
+      el.className = 'cmarker' + (owned ? ' owned' : '');
+      el.style.width = '26px'; el.style.height = '26px'; el.style.fontSize = '13px';
+      el.innerHTML = prop.icon;
+      const icon = L.divIcon({ html: el.outerHTML, className:'', iconSize:[26,26], iconAnchor:[13,13] });
+      const m = L.marker([prop.lat, prop.lng], { icon }).addTo(leafletMap);
+      m.on('click', (e) => { L.DomEvent.stopPropagation(e); openOSMPopupById(prop); });
+      _osmMapMarkers[prop.id] = m;
+    });
+  } catch(e) { /* silently fail */ }
+}
+
+async function openOSMPopupById(prop) {
+  try {
+    const data = await api.osmLookup(prop.lat, prop.lng);
+    if (data.found) openOSMPopup(data);
+  } catch(e) { toast('Ошибка загрузки', 'error'); }
 }
 
 function refreshMapMarkers() {
@@ -712,12 +834,15 @@ function doLogout() {
 //  LOAD STATE
 // ══════════════════════════════════════════════════════════
 async function loadGameState() {
-  const [meData, propsData] = await Promise.all([api.me(), api.properties()]);
-  G.player       = meData.player;
-  G.ownerships   = meData.ownerships;
-  G.incomePerSec = meData.incomePerSec;
-  G.properties   = propsData;
-  G.nickname     = G.player.nickname;
+  const [meData, propsData, osmOwned] = await Promise.all([
+    api.me(), api.properties(), api.osmOwned().catch(()=>[])
+  ]);
+  G.player          = meData.player;
+  G.ownerships      = meData.ownerships;
+  G.incomePerSec    = meData.incomePerSec;
+  G.properties      = propsData;
+  G.osmOwnerships   = osmOwned;
+  G.nickname        = G.player.nickname;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1102,6 +1227,125 @@ setInterval(() => {
     setTimeout(() => el.remove(), 2000);
   }
 }, 1000);
+
+// ══════════════════════════════════════════════════════════
+//  OSM POPUP
+// ══════════════════════════════════════════════════════════
+let _activeOSM = null;
+
+function openOSMPopup(data) {
+  _activeOSM = data;
+  const overlay = document.getElementById('osm-popup-overlay');
+  overlay.style.display = 'flex';
+
+  document.getElementById('osm-icon').textContent = data.icon || '🏠';
+  document.getElementById('osm-name').textContent = data.property ? data.property.name : data.name;
+  document.getElementById('osm-loc').textContent  = '📍 ' + (data.property ? data.property.location : data.location);
+  document.getElementById('osm-type-badge').textContent = '🏷️ ' + (data.buildingType || data.property?.building_type || 'здание');
+
+  const cost       = data.property ? data.property.cost : data.cost;
+  const incomeBase = data.property ? data.property.income_base : data.incomeBase;
+  const minLevel   = data.property ? data.property.min_level : data.minLevel;
+  const availPct   = data.availablePct ?? 100;
+
+  document.getElementById('osm-cost').textContent   = fmt(cost);
+  document.getElementById('osm-income').textContent = fmt(incomeBase) + '/сек';
+  document.getElementById('osm-minlvl').textContent = 'Ур. ' + minLevel;
+  document.getElementById('osm-avail').textContent  = availPct.toFixed(1) + '%';
+
+  // Owners list
+  const ownersList = document.getElementById('osm-owners-list');
+  ownersList.innerHTML = '';
+  (data.owners || []).forEach(o => {
+    const isMe = o.nickname === G.nickname;
+    ownersList.innerHTML += `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:${isMe?'var(--accent)':'var(--text)'};font-weight:${isMe?'600':'400'}">${isMe?'👤 Вы':o.nickname}</span>
+      <span style="font-family:'Space Mono',monospace;color:var(--accent2)">${parseFloat(o.pct).toFixed(1)}%</span>
+    </div>`;
+  });
+  if (availPct > 0) {
+    ownersList.innerHTML += `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text-dim);font-style:italic">Свободно</span>
+      <span style="font-family:'Space Mono',monospace;color:var(--accent2)">${availPct.toFixed(1)}%</span>
+    </div>`;
+  }
+
+  const slider = document.getElementById('osm-slider');
+  slider.max   = Math.floor(availPct);
+  slider.value = Math.min(10, Math.floor(availPct));
+
+  const locked  = G.player && G.player.level < minLevel;
+  const buyBtn  = document.getElementById('osm-buy-btn');
+  buyBtn.disabled = locked || availPct <= 0;
+  if (locked)        buyBtn.textContent = `Нужен уровень ${minLevel}`;
+  else if (availPct <= 0) buyBtn.textContent = 'Нет долей';
+  else               buyBtn.textContent = 'Купить';
+
+  updateOSMCalc();
+}
+
+function updateOSMCalc() {
+  if (!_activeOSM) return;
+  const pct  = parseInt(document.getElementById('osm-slider').value);
+  const cost = (_activeOSM.property ? _activeOSM.property.cost : _activeOSM.cost) * pct / 100;
+  document.getElementById('osm-pct-lbl').textContent  = pct + '%';
+  document.getElementById('osm-cost-lbl').textContent = fmt(cost);
+}
+
+function closeOSMPopup() {
+  document.getElementById('osm-popup-overlay').style.display = 'none';
+  _activeOSM = null;
+}
+
+async function confirmOSMBuy() {
+  if (!_activeOSM) return;
+  const pct = parseInt(document.getElementById('osm-slider').value);
+  const d   = _activeOSM;
+
+  const buyData = d.inDb ? {
+    osmId:       d.property.id,
+    osmType:     d.property.osm_type,
+    name:        d.property.name,
+    location:    d.property.location,
+    icon:        d.property.icon,
+    buildingType:d.property.building_type,
+    minLevel:    d.property.min_level,
+    cost:        d.property.cost,
+    incomeBase:  d.property.income_base,
+    lat:         d.property.lat,
+    lng:         d.property.lng,
+    pct,
+  } : {
+    osmId:       d.osmId,
+    osmType:     d.osmType || 'way',
+    name:        d.name,
+    location:    d.location,
+    icon:        d.icon,
+    buildingType:d.buildingType,
+    minLevel:    d.minLevel,
+    cost:        d.cost,
+    incomeBase:  d.incomeBase,
+    lat:         d.lat,
+    lng:         d.lng,
+    pct,
+  };
+
+  const btn = document.getElementById('osm-buy-btn');
+  btn.disabled = true; btn.textContent = '…';
+
+  try {
+    const res = await api.osmBuy(buyData);
+    toast(`✅ +${pct}% «${buyData.name}» куплено!${res.leveledUp?' 🎉 Уровень '+res.newLevel+'!':''}`, 'success');
+    closeOSMPopup();
+    await loadGameState();
+    renderAll();
+    refreshMapMarkers();
+    loadOSMMarkers();
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false; btn.textContent = 'Купить';
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 //  INIT

@@ -5,11 +5,12 @@ const TICK_SECONDS = parseInt(process.env.INCOME_TICK_SECONDS || '10');
 
 async function runIncomeTick() {
   try {
-    // Load all players who have at least one ownership
+    // All players with any ownership (static or OSM)
     const { rows: players } = await query(`
       SELECT DISTINCT p.id, p.level, p.upg_speed, p.last_income_at
       FROM players p
-      JOIN ownership o ON o.player_id = p.id
+      WHERE EXISTS (SELECT 1 FROM ownership     o  WHERE o.player_id = p.id)
+         OR EXISTS (SELECT 1 FROM osm_ownership oo WHERE oo.player_id = p.id)
     `);
 
     if (players.length === 0) return;
@@ -21,20 +22,28 @@ async function runIncomeTick() {
         );
         if (secondsElapsed < 1) continue;
 
-        // Get ownerships with property income_base
-        const { rows: ownerships } = await query(`
+        // Static ownerships
+        const { rows: staticOwn } = await query(`
           SELECT o.pct, o.upg_level, pr.income_base
           FROM ownership o
           JOIN properties pr ON pr.id = o.property_id
           WHERE o.player_id = $1
         `, [player.id]);
 
-        const incomePerSec = calcTotalIncome(player, ownerships);
-        const earned = incomePerSec * secondsElapsed;
+        // OSM ownerships
+        const { rows: osmOwn } = await query(`
+          SELECT oo.pct, oo.upg_level, op.income_base
+          FROM osm_ownership oo
+          JOIN osm_properties op ON op.id = oo.osm_id
+          WHERE oo.player_id = $1
+        `, [player.id]);
+
+        const allOwnerships = [...staticOwn, ...osmOwn];
+        const incomePerSec  = calcTotalIncome(player, allOwnerships);
+        const earned        = incomePerSec * secondsElapsed;
         if (earned <= 0) continue;
 
         await withTransaction(async (client) => {
-          // Credit balance and total_earned, update last_income_at
           await client.query(`
             UPDATE players
             SET balance        = balance + $1,
@@ -43,7 +52,6 @@ async function runIncomeTick() {
             WHERE id = $2
           `, [earned, player.id]);
 
-          // Log the income transaction
           await client.query(`
             INSERT INTO transactions (player_id, type, amount, meta)
             VALUES ($1, 'income', $2, $3)
@@ -61,7 +69,6 @@ async function runIncomeTick() {
 function startIncomeTicker() {
   console.log(`⏱  Income ticker started — tick every ${TICK_SECONDS}s`);
   setInterval(runIncomeTick, TICK_SECONDS * 1000);
-  // Run once on startup after a short delay
   setTimeout(runIncomeTick, 3000);
 }
 

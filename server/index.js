@@ -9,6 +9,7 @@ const authRoutes       = require('./routes/auth');
 const playerRoutes     = require('./routes/player');
 const propertiesRoutes = require('./routes/properties');
 const gameRoutes       = require('./routes/game');
+const osmRoutes        = require('./routes/osm');
 const { startIncomeTicker } = require('./game/incomeTicker');
 
 const app  = express();
@@ -50,6 +51,7 @@ app.use('/api/auth',       authRoutes);
 app.use('/api/player',     playerRoutes);
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/game',       gameRoutes);
+app.use('/api/osm',        osmRoutes);
 
 // ── Health check ────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

@@ -1,6 +1,5 @@
 services:
 
-  # ── PostgreSQL ───────────────────────────────────────────
   db:
     image: postgres:16-alpine
     container_name: landlord_db
@@ -11,7 +10,6 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - landlord_pgdata:/var/lib/postgresql/data
-    # Not exposed to host — only reachable by app container
     networks:
       - landlord_net
     healthcheck:
@@ -20,11 +18,10 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Migration runner (runs once, then exits) ─────────────
   migrate:
     build: .
     container_name: landlord_migrate
-    command: sh -c "node server/db/migrate.js && node server/db/seed.js"
+    command: sh -c "node server/db/migrate.js && node server/db/seed.js && node server/db/migrate_osm.js"
     env_file: .env
     environment:
       DB_HOST: db
@@ -33,10 +30,8 @@ services:
         condition: service_healthy
     networks:
       - landlord_net
-    # One-shot: don't restart
     restart: "no"
 
-  # ── App ──────────────────────────────────────────────────
   app:
     build: .
     container_name: landlord_app
@@ -45,9 +40,9 @@ services:
     environment:
       DB_HOST:      db
       NODE_ENV:     production
-      CORS_ORIGIN:  https://landlord.cyphorium.com
+      CORS_ORIGIN:  https://landlord.cyphorium.com:4443
     ports:
-      - "127.0.0.1:3000:3000"   # only localhost — Nginx proxies from outside
+      - "127.0.0.1:3000:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully
