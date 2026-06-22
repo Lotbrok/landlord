@@ -11,7 +11,11 @@ async function fetchOverpass(overpassQuery) {
 
   const res = await fetch(url, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+  	'Content-Type': 'application/x-www-form-urlencoded',
+  	'Accept':       'application/json',
+  	'User-Agent':   'LandlordGame/1.0',
+    },
     body,
     signal: AbortSignal.timeout(8000),
   });
