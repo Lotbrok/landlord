@@ -192,7 +192,7 @@ body {
 #game-screen { display: flex; flex: 1; overflow: hidden; }
 #game-screen.hidden { display: none; }
 #map { flex: 1; z-index: 1; }
-.leaflet-tile { filter: brightness(.7) hue-rotate(200deg) saturate(.5); }
+/* map tiles — no filter, using light theme */
 
 /* ══ SIDEBAR ══════════════════════════════════════════════ */
 #sidebar {
@@ -358,12 +358,12 @@ body {
 
 /* custom marker */
 .cmarker {
-  background: var(--panel); border: 2px solid var(--accent3); border-radius: 50%;
+  background: #fff; border: 2px solid #6366f1; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; font-size: 14px;
-  box-shadow: 0 0 10px rgba(96,165,250,.3); transition: transform .2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25); transition: transform .2s;
 }
-.cmarker.owned { border-color: var(--accent); box-shadow: 0 0 12px rgba(74,222,128,.4); }
-.cmarker.locked { border-color: var(--muted); opacity: .6; }
+.cmarker.owned { border-color: #16a34a; box-shadow: 0 2px 10px rgba(22,163,74,.4); }
+.cmarker.locked { border-color: #94a3b8; opacity: .7; }
 
 /* API URL config banner */
 #api-config-banner {
@@ -678,7 +678,7 @@ let mapMarkers = {};
 function initMap() {
   if (leafletMap) return;
   leafletMap = L.map('map', { zoomControl: true }).setView([30, 20], 2);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '©OpenStreetMap ©CartoDB', subdomains: 'abcd', maxZoom: 19
   }).addTo(leafletMap);
 
